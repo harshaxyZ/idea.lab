@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { db, auth } from "@/lib/firebase";
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged, User, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
-import { collection, getDocs, doc, updateDoc, query, orderBy, deleteDoc, writeBatch, setDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import AdminStats from "@/components/AdminStats";
 import StudentTable from "@/components/StudentTable";
 import CSVUploader from "@/components/CSVUploader";
@@ -196,59 +196,26 @@ export default function AdminPage() {
         setResetError("");
 
         try {
+            // Re-authenticate to confirm identity
             const credential = EmailAuthProvider.credential(user.email, resetPassword);
             await reauthenticateWithCredential(user, credential);
 
-            const regSnap = await getDocs(collection(db, "registrations"));
-            if (!regSnap.empty) {
-                const batch = writeBatch(db);
-                regSnap.forEach((docSnap) => batch.delete(docSnap.ref));
-                await batch.commit();
+            // Get a fresh ID token for the server
+            const idToken = await user.getIdToken(true);
+
+            // Call server-side reset API (uses admin SDK, bypasses Firestore rules)
+            const res = await fetch("/api/admin/reset-database", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken, clearCSV, clearOtpCodes }),
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to reset database.");
             }
 
-            const teamsSnap = await getDocs(collection(db, "teams"));
-            if (!teamsSnap.empty) {
-                const batch = writeBatch(db);
-                teamsSnap.forEach((docSnap) => batch.delete(docSnap.ref));
-                await batch.commit();
-            }
-
-            const invitesSnap = await getDocs(collection(db, "invites"));
-            if (!invitesSnap.empty) {
-                const batch = writeBatch(db);
-                invitesSnap.forEach((docSnap) => batch.delete(docSnap.ref));
-                await batch.commit();
-            }
-
-            // Clear CSV student data if selected
-            if (clearCSV) {
-                const studentsSnap = await getDocs(collection(db, "students"));
-                if (!studentsSnap.empty) {
-                    // Batch in groups of 450
-                    const docs = studentsSnap.docs;
-                    for (let i = 0; i < docs.length; i += 450) {
-                        const batch = writeBatch(db);
-                        docs.slice(i, i + 450).forEach((docSnap) => batch.delete(docSnap.ref));
-                        await batch.commit();
-                    }
-                }
-            }
-
-            // Clear OTP codes if selected
-            if (clearOtpCodes) {
-                try {
-                    const otpDocs = await getDocs(collection(db, "otp_codes"));
-                    for (let i = 0; i < otpDocs.docs.length; i += 450) {
-                        const batch = writeBatch(db);
-                        otpDocs.docs.slice(i, i + 450).forEach((docSnap) => batch.delete(docSnap.ref));
-                        await batch.commit();
-                    }
-                } catch (err) {
-                    console.error("OTP codes cleanup:", err);
-                }
-            }
-
-            alert("Database has been successfully reset." + (clearCSV ? " CSV data cleared." : "") + (clearOtpCodes ? " OTP codes cleared." : ""));
+            alert(data.message || "Database has been successfully reset.");
             setShowResetModal(false);
             setResetPassword("");
             setResetPhrase("");
@@ -266,7 +233,15 @@ export default function AdminPage() {
     const toggleRegistrations = async () => {
         setConfigLoading(true);
         try {
-            await setDoc(doc(db, "config", "global_config"), { registrationsOpen: !registrationsOpen }, { merge: true });
+            const user = auth.currentUser;
+            if (!user) throw new Error("Not authenticated");
+            const idToken = await user.getIdToken(true);
+            const res = await fetch("/api/admin/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken, updates: { registrationsOpen: !registrationsOpen } }),
+            });
+            if (!res.ok) throw new Error("Failed to update config");
             setRegistrationsOpen(!registrationsOpen);
         } catch {
             console.error("Error updating config");
@@ -278,7 +253,15 @@ export default function AdminPage() {
     const toggleTeamFormation = async () => {
         setConfigLoading(true);
         try {
-            await setDoc(doc(db, "config", "global_config"), { teamFormationOpen: !teamFormationOpen }, { merge: true });
+            const user = auth.currentUser;
+            if (!user) throw new Error("Not authenticated");
+            const idToken = await user.getIdToken(true);
+            const res = await fetch("/api/admin/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ idToken, updates: { teamFormationOpen: !teamFormationOpen } }),
+            });
+            if (!res.ok) throw new Error("Failed to update config");
             setTeamFormationOpen(!teamFormationOpen);
         } catch {
             console.error("Error updating config");
@@ -533,13 +516,29 @@ export default function AdminPage() {
                                     <CSVStudentTable
                                         students={csvStudents}
                                         onUpdate={async (usn, data) => {
-                                            await updateDoc(doc(db, "students", usn), data);
+                                            const currentUser = auth.currentUser;
+                                            if (!currentUser) throw new Error("Not authenticated");
+                                            const idToken = await currentUser.getIdToken(true);
+                                            const res = await fetch("/api/admin/students", {
+                                                method: "PUT",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ idToken, usn, data }),
+                                            });
+                                            if (!res.ok) throw new Error("Update failed");
                                             setCsvStudents((prev) =>
                                                 prev.map((s) => (s.usn === usn ? { ...s, ...data } : s))
                                             );
                                         }}
                                         onDelete={async (usn) => {
-                                            await deleteDoc(doc(db, "students", usn));
+                                            const currentUser = auth.currentUser;
+                                            if (!currentUser) throw new Error("Not authenticated");
+                                            const idToken = await currentUser.getIdToken(true);
+                                            const res = await fetch("/api/admin/students", {
+                                                method: "DELETE",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ idToken, usn }),
+                                            });
+                                            if (!res.ok) throw new Error("Delete failed");
                                             setCsvStudents((prev) => prev.filter((s) => s.usn !== usn));
                                             setCsvStudentCount((c) => c - 1);
                                         }}

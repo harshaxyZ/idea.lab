@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { db } from "@/lib/firebase";
-import { doc, writeBatch, serverTimestamp } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import { parseCSV, CSVRow } from "@/lib/csvParser";
 import { Upload, FileText, AlertTriangle, CheckCircle2, X } from "lucide-react";
 
@@ -41,36 +40,27 @@ export default function CSVUploader({ onUploadComplete }: CSVUploaderProps) {
     setUploadResult(null);
 
     try {
-      const batchId = `batch_${Date.now()}`;
-      // Firestore batch writes max 500 per batch
-      const chunks: CSVRow[][] = [];
-      for (let i = 0; i < preview.length; i += 450) {
-        chunks.push(preview.slice(i, i + 450));
-      }
+      const user = auth.currentUser;
+      if (!user) throw new Error("Not authenticated");
+      const idToken = await user.getIdToken(true);
 
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        for (const row of chunk) {
-          const ref = doc(db, "students", row.usn);
-          batch.set(ref, {
+      const res = await fetch("/api/admin/upload-csv", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idToken,
+          students: preview.map((row) => ({
             usn: row.usn,
             name: row.name,
             email: row.email,
             phone: row.phone,
             branch: row.branch,
             section: row.section,
-            importedAt: serverTimestamp(),
-            importBatch: batchId,
-          });
-        }
-        await batch.commit();
-      }
-
-      // Update config with last upload time
-      const configBatch = writeBatch(db);
-      const configRef = doc(db, "config", "global_config");
-      configBatch.set(configRef, { csvLastUploadedAt: serverTimestamp() }, { merge: true });
-      await configBatch.commit();
+          })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
 
       setUploadResult({ success: true, message: `Successfully imported ${preview.length} students.` });
       setPreview(null);
