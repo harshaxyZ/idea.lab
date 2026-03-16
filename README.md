@@ -2,6 +2,54 @@
 
 Team formation platform for first-year students at Don Bosco Institute of Technology, Bangalore. Students self-organize into cross-branch teams of 6 members, with real-time constraint validation and admin oversight.
 
+> **Live** — [idea-lab-sage.vercel.app](https://idea-lab-sage.vercel.app/)
+> **Repo** — [github.com/harshaxyZ/idea.lab](https://github.com/harshaxyZ/idea.lab.git)
+> **Report** — [IEEE Format (PDF)](report/main.pdf)
+
+---
+
+## Preview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  IDEA LAB — DBIT                                    [Register]  │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│   │  Register   │  │  Dashboard  │  │   Browse    │           │
+│   │  USN + OTP  │→ │  Team Mgmt  │→ │   Teams     │           │
+│   │  3-step     │  │  Invites    │  │   Join/Req  │           │
+│   └─────────────┘  └─────────────┘  └─────────────┘           │
+│                                                                 │
+│   ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│   │   Create    │  │    Team     │  │   Admin     │           │
+│   │   Team      │  │   Page      │  │   Panel     │           │
+│   │  TEAM-XXXX  │  │  Constraints│  │  6 Tabs     │           │
+│   └─────────────┘  └─────────────┘  └─────────────┘           │
+│                                                                 │
+│   Design: Paper & Ink  │  Auth: OTP + JWT  │  DB: Firestore   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Key Highlights
+
+- **825+ students** across **7 engineering branches**
+- **Real-time constraint validation** — max 4 from one branch, min 2 unique branches, EEE/ECE requirement
+- **Custom OTP authentication** via Brevo Email API with rate limiting
+- **Admin dashboard** — CSV upload, gate controls, stats, export
+- **10,937 lines** of TypeScript | **58 files** | **19 components** | **11 API routes**
+
+### Team
+
+| Name | USN | Role |
+|------|-----|------|
+| Harsha N | 1DB25CS065 | Developer |
+| Mithun Gowda B | 1DB25CS109 | Lead Developer |
+| Naren V | 1DB25CS113 | QA & Review |
+| Nevil Anson Dsouza | 1DB25CS116 | Developer |
+
+> Dept. of Computer Science & Engineering, Section B — Don Bosco Institute of Technology, Bangalore (VTU)
+
 ---
 
 ## Table of Contents
